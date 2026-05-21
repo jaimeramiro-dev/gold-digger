@@ -1,0 +1,155 @@
+# Gold Digger — Living Source Registry
+# Endpoints verified 2026-05-21. Update comments when re-verified.
+version: 1
+
+# Layer 1: Ecosystem-wide (always consulted regardless of user profile)
+ecosystem:
+  mcp_registries:
+    - name: "Official MCP Registry"
+      url: "https://registry.modelcontextprotocol.io/v0.1/servers"
+      # Verified 2026-05-21: returns {servers: [...], metadata: {nextCursor, count}}
+      # Each server has .server.name, .server.description, .server.title, .server.repository
+      auth: none
+      type: api
+      priority: high
+
+    - name: "Glama"
+      url: "https://glama.ai/api/mcp/v1/servers"
+      # Verified 2026-05-21: returns {servers: [...], pageInfo: {...}}
+      # Each server has .name, .namespace, .slug, .description, .attributes, .repository.url
+      # No auth required. Cursor-based pagination via ?after=<cursor>
+      auth: none
+      type: api
+      priority: medium
+
+  skills_registries:
+    - name: "GitHub agent-skills topic"
+      type: github_topic
+      topics:
+        - agent-skills
+        - claude-code-skills
+        - claude-skills
+      auth: github_token_optional
+
+  github:
+    search_topics:
+      - mcp-server
+      - mcp
+      - model-context-protocol
+      - agent-skills
+      - claude-skills
+    type: github_search
+    auth: github_token_optional
+
+  news:
+    - name: "Hacker News"
+      url: "https://hn.algolia.com/api/v1/search_by_date"
+      # Verified 2026-05-21: returns {hits: [...], nbHits, nbPages, ...}
+      # Each hit has: title, url, points, num_comments, created_at, objectID, author
+      # No auth. 10,000 req/hr.
+      auth: none
+      type: api
+
+    - name: "Product Hunt"
+      url: "https://api.producthunt.com/v2/api/graphql"
+      # GraphQL API. Requires a free developer token (Bearer header).
+      auth: ph_token_optional
+      type: graphql
+
+    - name: "OSS Insight Trending"
+      url: "https://api.ossinsight.io/v1/trends/repos/"
+      # Verified 2026-05-21: returns {type, data: {columns, rows: [...]}}
+      # Each row has: repo_name, description, stars, primary_language, total_score
+      # No auth required.
+      auth: none
+      type: api
+
+  reddit:
+    # Default subs — extended dynamically from profile domains.
+    # Access via https://www.reddit.com/r/<sub>/new.json?limit=25
+    # No auth, but max 10 req/min. Needs User-Agent header.
+    default_subs:
+      dev:
+        - programming
+        - MachineLearning
+        - LocalLLaMA
+        - ClaudeAI
+        - ChatGPT
+      marketing:
+        - marketing
+        - PPC
+        - digital_marketing
+        - FacebookAds
+      design:
+        - web_design
+        - UI_Design
+      gaming_dev:
+        - gamedev
+        - robloxgamedev
+    type: reddit_json
+    auth: none
+
+# Layer 2: Per-tool channels (matched against profile.detected.stack + declared interests)
+# Priority: RSS/Atom > GitHub releases > HTML page scrape
+per_tool_channels:
+  # --- AI Labs (shipped by default) ---
+  openai:
+    - url: "https://openai.com/news/rss.xml"
+      type: rss
+      # Verified 2026-05-21: valid RSS 2.0, title "OpenAI News"
+
+  google_deepmind:
+    - url: "https://deepmind.google/blog/rss.xml"
+      type: rss
+      # Verified 2026-05-21: valid RSS 2.0, title "Google DeepMind News"
+
+  anthropic:
+    - repo: "anthropics/claude-code"
+      type: github_releases
+    - url: "https://www.anthropic.com/news"
+      type: page
+      # No RSS found at /rss.xml, /feed.xml, /news/rss (all 404 on 2026-05-21)
+
+  meta_ai:
+    - url: "https://ai.meta.com/blog/"
+      type: page
+      # No RSS found at /rss/, /feed/ (all 404 on 2026-05-21)
+
+  deepseek:
+    - repo: "deepseek-ai/DeepSeek-V3"
+      type: github_releases
+    - url: "https://api-docs.deepseek.com/news/"
+      type: page
+
+  # --- Frameworks/Tools (activated when detected in user's stack) ---
+  nextjs:
+    - repo: "vercel/next.js"
+      type: github_releases
+
+  supabase:
+    - repo: "supabase/supabase"
+      type: github_releases
+
+  vercel:
+    - url: "https://vercel.com/changelog"
+      type: page
+
+  react:
+    - repo: "facebook/react"
+      type: github_releases
+
+  tailwindcss:
+    - repo: "tailwindlabs/tailwindcss"
+      type: github_releases
+
+  prisma:
+    - repo: "prisma/prisma"
+      type: github_releases
+
+  fastapi:
+    - repo: "fastapi/fastapi"
+      type: github_releases
+
+  django:
+    - repo: "django/django"
+      type: github_releases

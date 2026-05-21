@@ -1,3 +1,8 @@
+# Gold Digger — per-user runtime files (never committed)
+profile.yaml
+queue.json
+misses.log
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
