@@ -1,5 +1,9 @@
 # Gold Digger
 
+![Stars](https://img.shields.io/github/stars/jaimeramiro-dev/gold-digger?style=flat&color=yellow)
+![Last Commit](https://img.shields.io/github/last-commit/jaimeramiro-dev/gold-digger?style=flat)
+![License](https://img.shields.io/github/license/jaimeramiro-dev/gold-digger?style=flat)
+
 A thousand new tools, MCPs, and skills drop every week. You bookmark a dozen, install three, use none. Gold Digger reads the firehose for you and surfaces the one or two things actually worth your time — or tells you, honestly, that there's nothing today.
 
 It's a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill. MIT, free to run. And yes, it's named Gold Digger because it's shamelessly only after the good stuff. No apologies.
