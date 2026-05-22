@@ -70,6 +70,25 @@ def _warn(msg: str) -> None:
     print(f"[scout] WARNING: {msg}", file=sys.stderr)
 
 
+def _fetch_readme_excerpt(full_name: str, token: str | None, max_chars: int = 500) -> str:
+    """Fetch the first ~500 chars of a GitHub repo's README. Best-effort."""
+    url = f"https://api.github.com/repos/{full_name}/readme"
+    headers = {"Accept": "application/vnd.github.raw+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        raw = _make_request(url, headers, timeout=3)
+        text = raw.decode("utf-8", errors="replace")[:max_chars]
+        # Strip markdown formatting noise — keep just readable text
+        import re
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)  # headings
+        text = re.sub(r"[`*_~\[\]()]", "", text)  # inline formatting
+        text = re.sub(r"\n{3,}", "\n\n", text)  # collapse blank lines
+        return text.strip()
+    except Exception:
+        return ""
+
+
 # ---------------------------------------------------------------------------
 # Candidate normalization
 # ---------------------------------------------------------------------------
@@ -164,7 +183,7 @@ def fetch_glama(since_iso: str) -> list[dict]:
 
 
 def fetch_github_search(query: str, token: str | None, since_date: str) -> list[dict]:
-    """GitHub search API — optional token."""
+    """GitHub search API — optional token. Enriches top results with README excerpts."""
     q = urllib.parse.quote(f"{query} created:>{since_date}")
     url = f"https://api.github.com/search/repositories?q={q}&sort=stars&order=desc&per_page=15"
     headers = {"Accept": "application/vnd.github+json"}
@@ -186,18 +205,47 @@ def fetch_github_search(query: str, token: str | None, since_date: str) -> list[
                 age_days = (datetime.now(timezone.utc) - created_dt).days
             except ValueError:
                 pass
+        desc = repo.get("description", "") or ""
+        full_name = repo.get("full_name", "")
         results.append(_candidate(
             source="github",
-            uid=repo.get("full_name", ""),
-            title=repo.get("full_name", ""),
+            uid=full_name,
+            title=full_name,
             url=repo.get("html_url", ""),
-            description=repo.get("description", "") or "",
+            description=desc,
             created_at=created,
             stars=repo.get("stargazers_count"),
             repo_age_days=age_days,
             language=repo.get("language"),
             topics=repo.get("topics", []),
         ))
+
+    # Enrich top results (by stars) with README excerpts — in parallel
+    # Only for repos where description is short (<80 chars)
+    enrichable = [
+        (i, r) for i, r in enumerate(results)
+        if len(r.get("description", "")) < 80
+    ][:5]  # cap at 5 to avoid burning rate limit
+
+    if enrichable:
+        from concurrent.futures import ThreadPoolExecutor as _Pool
+        with _Pool(max_workers=5) as pool:
+            futures = {
+                pool.submit(_fetch_readme_excerpt, r["title"], token): i
+                for i, r in enrichable
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    excerpt = future.result()
+                    if excerpt:
+                        existing = results[idx].get("description", "")
+                        results[idx]["description"] = (
+                            f"{existing}\n---\n{excerpt}" if existing else excerpt
+                        )
+                except Exception:
+                    pass
+
     return results
 
 
