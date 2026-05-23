@@ -105,6 +105,9 @@ def _candidate(
     language: str | None = None,
     topics: list[str] | None = None,
     points: int | None = None,
+    pushed_at: str | None = None,
+    archived: bool | None = None,
+    forks_count: int | None = None,
 ) -> dict:
     """Build a normalized candidate dict."""
     return {
@@ -120,6 +123,9 @@ def _candidate(
             "repo_age_days": repo_age_days,
             "language": language,
             "topics": topics or [],
+            "pushed_at": pushed_at,
+            "archived": archived,
+            "forks_count": forks_count,
         },
     }
 
@@ -218,6 +224,9 @@ def fetch_github_search(query: str, token: str | None, since_date: str) -> list[
             repo_age_days=age_days,
             language=repo.get("language"),
             topics=repo.get("topics", []),
+            pushed_at=repo.get("pushed_at"),
+            archived=repo.get("archived"),
+            forks_count=repo.get("forks_count"),
         ))
 
     # Enrich top results (by stars) with README excerpts — in parallel
