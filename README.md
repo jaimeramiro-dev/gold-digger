@@ -1,8 +1,14 @@
-# Gold Digger
+<p align="center">
+  <img src="assets/logo.png" alt="Gold Digger" width="120">
+</p>
 
-![Stars](https://img.shields.io/github/stars/jaimeramiro-dev/gold-digger?style=flat&color=yellow)
-![Last Commit](https://img.shields.io/github/last-commit/jaimeramiro-dev/gold-digger?style=flat)
-![License](https://img.shields.io/github/license/jaimeramiro-dev/gold-digger?style=flat)
+<h1 align="center">Gold Digger</h1>
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/jaimeramiro-dev/gold-digger?style=flat&color=yellow">
+  <img src="https://img.shields.io/github/last-commit/jaimeramiro-dev/gold-digger?style=flat">
+  <img src="https://img.shields.io/github/license/jaimeramiro-dev/gold-digger?style=flat">
+</p>
 
 A thousand new tools, MCPs, and skills drop every week. You bookmark a dozen, install three, use none. Gold Digger reads the firehose for you and surfaces the one or two things actually worth your time — or tells you, honestly, that there's nothing today.
 
