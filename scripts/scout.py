@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import ssl
 import sys
 import time
@@ -500,14 +501,48 @@ def get_github_token(cli_token: str | None) -> str | None:
 
 
 def build_hn_keywords(profile: dict) -> list[str]:
-    """Build HN search keywords from the user's profile."""
+    """Build HN search keywords from the user's profile.
+
+    Priority order (fills up to 8 slots):
+      1. Fixed ecosystem terms: MCP, claude, AI tool (3 slots, always present)
+      2. Stack + searchable dimensions INTERLEAVED (up to 5 slots):
+         alternates stack, dimension, stack, dimension... so both get
+         representation even when one list is large. If one list runs out
+         the other fills the remaining slots.
+      3. Declared interests (whatever slots remain)
+    """
     keywords = ["MCP", "claude", "AI tool"]
+    remaining = 8 - len(keywords)  # 5 slots
+
     detected = profile.get("detected", {})
-    for item in detected.get("stack", []):
-        keywords.append(item)
+    stack_items = list(detected.get("stack", []))
     declared = profile.get("declared", {})
-    for interest in declared.get("interests", []):
-        keywords.append(interest)
+    dim_items = [
+        dim.get("name", "")
+        for dim in declared.get("dimensions", [])
+        if isinstance(dim, dict) and dim.get("searchable")
+    ]
+
+    # Interleave stack and dimensions
+    si, di = 0, 0
+    interleaved: list[str] = []
+    while si < len(stack_items) or di < len(dim_items):
+        if si < len(stack_items):
+            interleaved.append(stack_items[si])
+            si += 1
+        if di < len(dim_items):
+            interleaved.append(dim_items[di])
+            di += 1
+
+    keywords.extend(interleaved[:remaining])
+
+    # Interests fill whatever is left
+    if len(keywords) < 8:
+        for interest in declared.get("interests", []):
+            keywords.append(interest)
+            if len(keywords) >= 8:
+                break
+
     return keywords[:8]
 
 
@@ -527,6 +562,14 @@ def get_relevant_subs(profile: dict, sources: dict) -> list[str]:
         for key, sub_list in default_subs.items():
             if key in domain or domain in key:
                 subs.extend(sub_list)
+
+    # Add subs matching searchable dimensions
+    for dim in declared.get("dimensions", []):
+        if isinstance(dim, dict) and dim.get("searchable"):
+            dim_name = dim.get("name", "").lower()
+            for key, sub_list in default_subs.items():
+                if dim_name in key or key in dim_name:
+                    subs.extend(sub_list)
 
     return list(dict.fromkeys(subs))[:8]  # dedupe, cap at 8
 
@@ -551,6 +594,49 @@ def get_layer2_channels(profile: dict, sources: dict) -> list[dict]:
                 channels.append({"name": tool_key, **ch})
 
     return channels
+
+
+# ---------------------------------------------------------------------------
+# Warez / piracy pre-filter
+# ---------------------------------------------------------------------------
+
+# Patterns that are almost always piracy — match case-insensitively against
+# the combined title + description text. Compound patterns reduce false
+# positives: "crack" alone could be legitimate ("crack detection"), but
+# "crack download" or "cracked version" is not.
+_WAREZ_PATTERNS: list[re.Pattern] = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"\bkeygen\b",
+        r"\bpatch\s+activator\b",
+        r"\bpre[- ]?activated\b",
+        r"\bnulled\b",
+        r"\bwarez\b",
+        r"\blicense\s+key\s+generator\b",
+        r"\bserial\s+key\b.*\b(?:download|free|full)\b",
+        r"\bcrack(?:ed)?\s+(?:download|version|installer|setup|latest)\b",
+        r"\bfull\s+version\s+crack(?:ed)?\b",
+        r"\b(?:free|full)\s+download\b.*\bcrack\b",
+        r"\bcrack\b.*\b(?:free|full)\s+download\b",
+    ]
+]
+
+
+def _filter_warez(candidates: list[dict]) -> list[dict]:
+    """Remove obvious piracy/warez candidates. Logs discards to stderr."""
+    clean = []
+    for c in candidates:
+        text = (
+            c.get("title", "") + " " + c.get("description", "")
+        )
+        matched = False
+        for pattern in _WAREZ_PATTERNS:
+            if pattern.search(text):
+                _warn(f"Filtered warez: {c.get('title', '?')} (matched: {pattern.pattern})")
+                matched = True
+                break
+        if not matched:
+            clean.append(c)
+    return clean
 
 
 def run_scout(
@@ -608,6 +694,33 @@ def run_scout(
                     futures[pool.submit(
                         fetch_github_search, f"topic:{topic}", token, since_date
                     )] = cache_key
+
+            # Dimension-based GitHub searches (up to 2 calls)
+            # Combine searchable dimensions into batched queries so we don't
+            # blow the rate limit. Group into max 2 queries of ~3 terms each.
+            declared = profile.get("declared", {})
+            dim_terms = [
+                dim.get("name", "")
+                for dim in declared.get("dimensions", [])
+                if isinstance(dim, dict) and dim.get("searchable") and dim.get("name")
+            ]
+            if dim_terms:
+                # Split into max 2 groups
+                mid = (len(dim_terms) + 1) // 2
+                dim_groups = [dim_terms[:mid], dim_terms[mid:]]
+                for gi, group in enumerate(dim_groups):
+                    if not group:
+                        continue
+                    # Free-text search: OR the terms together
+                    query = " OR ".join(f'"{t}"' for t in group[:3])
+                    cache_key = f"gh_dim_{gi}"
+                    cached = _read_cache(cache_key)
+                    if cached is not None:
+                        all_candidates.extend(cached)
+                    else:
+                        futures[pool.submit(
+                            fetch_github_search, query, token, since_date
+                        )] = cache_key
 
             # Hacker News
             hn_keywords = build_hn_keywords(profile)
@@ -677,6 +790,11 @@ def run_scout(
         if url and url not in seen_urls:
             seen_urls.add(url)
             deduped.append(c)
+
+    # Filter obvious piracy/warez — these waste candidate slots and must
+    # never be recommended. Compound patterns to avoid false positives
+    # (e.g. "crack detection" in image processing is legitimate).
+    deduped = _filter_warez(deduped)
 
     # Sort: prioritize by stars/points (descending), then recency
     def sort_key(c: dict) -> tuple:
