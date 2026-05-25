@@ -319,23 +319,53 @@ When the user indicates a recommendation was a miss — "that was a miss", "not 
       - DROP → usage signal confirms unused
    e. Cross-reference: seen from multiple sources? Stronger signal.
    f. VERDICT: recommend (which type?) or archive silently
-   Select top 1–3. If none survive → output NOTHING line.
+   Select top 1–3. If none survive → no scout recommendations (but Stage 2.5 may still produce one).
+
+--- STAGE 2.5: ESTABLISHED TOOLS (Claude's own knowledge, verified) ---
+The scout finds what's NEW. This stage finds what's ESTABLISHED but missing from the user's
+setup. Together they are the two halves of a Gold Digger review: new things worth adopting, and
+known things worth adopting. Neither half is optional or secondary.
+
+How it works:
+a. Review the user's full profile — stack, product, dimensions (searchable AND filter-only),
+   pain_points, monetization, workflows, installed tools. Think: is there an established,
+   well-known tool, skill, MCP, or capability that would close a REAL gap in this user's
+   setup? "Real gap" means: the user does X manually or painfully, and Y exists, is mature,
+   and would materially improve that part of their work.
+b. The bar is HIGH but the posture is ACTIVE. You are expected to look for gaps in every
+   review — this is a core part of the product, not a rare exception. But if nothing genuinely
+   closes a gap, you produce nothing. The bar is "would I bet this improves their week?" —
+   not "this is kinda related."
+c. Constraints:
+   - Maximum 1 established-tool suggestion per review. This is a curated pick, not a list.
+   - Do NOT repeat anything already in detected.stack, installed_mcps, or installed_skills.
+   - Do NOT repeat anything already recommended by the scout in this review.
+   - Do NOT recommend something the user explicitly muted (muted_topics).
+d. VERIFY before recommending. Once you have a candidate, do ONE web_fetch to its official
+   repo or website to confirm it still exists and is actively maintained. At most 1-2 fetches
+   total in this stage — decide your candidate(s) first, then verify. Do not speculatively
+   fetch multiple options.
+   - If verification succeeds: recommend with the verified URL and date.
+   - If verification fails (404, timeout, archived): still mention it but say you could not
+     verify current status. The user decides.
+e. Numbers from the fetch are VERBATIM (spine #4). Stars, dates, versions — only from fetched
+   data in THIS session. Never write numbers from memory. If you didn't fetch it, omit it.
 
 --- STAGE 3: SAFETY SCAN (only 1-3 final recommendations) ---
-10. For any ADD/CONNECT of something installable:
+10. For any ADD/CONNECT of something installable (from scout OR established-tools):
     Bash ${CLAUDE_SKILL_DIR}/scripts/safety_scan.py --repo <url>
     Attach verdict. If dangerous: STILL SHOW with flags. User decides.
 11. FORMAT output (see OUTPUT FORMAT)
 12. CLEAR processed items from queue.json
 ```
 
-**CRITICAL:** If NO candidate passes — at Stage 1 OR Stage 2 — output ONLY the NOTHING line. Do NOT weaken criteria. Do NOT invent a recommendation. Silence is correct.
+**CRITICAL:** If NO candidate passes from the scout AND Stage 2.5 has no gap to close — output ONLY the NOTHING line. Do NOT weaken criteria. Do NOT invent a recommendation. Silence is correct. But silence should come from having genuinely looked in BOTH halves and found nothing, not from skipping Stage 2.5.
 
 ---
 
 ## OUTPUT FORMAT
 
-Five recommendation types, framed as a diff on the user's setup:
+Six recommendation types, framed as a diff on the user's setup:
 
 ```
 + ADD: <tool/skill/MCP> — <slice or whole>, because <reason with specifics>.
@@ -354,6 +384,10 @@ Five recommendation types, framed as a diff on the user's setup:
   Safety: <verdict>.
 
 - DROP: <tool/skill/MCP> — <reason: unused N days | superseded by X you already have>.
+
+💡 KNOWN: <tool> — <gap it closes for THIS user, with specifics>.
+   From general knowledge — verified active via <url> (<date>).
+   [or: "Could not verify current status — check before adopting."]
 
 ~ Nothing worth your attention right now. Your setup is clean.
 ```
