@@ -14,13 +14,13 @@ A thousand new tools, MCPs, and skills drop every week. You bookmark a dozen, in
 
 It's a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill. MIT, free to run. And yes, it's named Gold Digger because it's shamelessly only after the good stuff. No apologies.
 
-[Install](#install) • [See it work](#see-it-work) • [Why it's not another feed](#why-its-not-another-feed) • [How the filter works](#how-the-filter-works)
+[Install](#install) • [See it work](#see-it-work) • [Why it's not another feed](#why-its-not-another-feed) • [Why not just ask Claude?](#why-not-just-ask-claude)
 
 ---
 
 ## See it work
 
-You ask. It digs. You get a short diff on your setup — what to add, what you already have but aren't using, what to drop. Every line carries the *reason*, in your terms:
+You ask. It digs. You get a short diff on your setup — what to add, what you already have but aren't using, what's established that you're missing. Every line carries the reason, in your terms:
 
 ```
 > What's worth my attention?
@@ -31,18 +31,18 @@ You ask. It digs. You get a short diff on your setup — what to add, what you a
               recent commits touch raw SQL. Stop alt-tabbing to a client:
               this puts schema + queries inside Claude.
 
-  ⇄ CONNECT   Stripe MCP — your whole last week was billing work. Pulls the
-              dashboard into Claude so you quit breaking flow to go read a
-              charge by hand.
-
   ↑ USE       codegraph — already installed, but you only ever run `search`.
               The `trace` command maps call paths — the thing you've been
               doing by eye every time you touch this service.
 
+  💡 KNOWN    Cursor — not new, just missing. Your last week was multi-file
+              refactors done by hand. Verified live today — not pulled from
+              stale training data.
+
   Curious what got cut? Ask "why'd you skip X?"
 ```
 
-Real stars, ages, and benchmarks show up inline on each pick — copied verbatim from live data, never the round numbers I'd make up for a screenshot. That's why this README shows the shape of a run, not a staged one.
+Real stars, ages, and dates show up inline on each pick — copied verbatim from live data, never the round numbers I'd make up for a screenshot. That's why this README shows the shape of a run, not a staged one.
 
 The part I'm actually proud of: when there's nothing good, it says so. No filler pick to look busy.
 
@@ -64,10 +64,19 @@ Finding new tools was never the problem. The problem is that there are too many 
 Gold Digger does the opposite:
 
 - **It judges against *your* stack, not the timeline.** Every pick comes with a concrete reason tied to what you actually build. If it can't write that reason, it doesn't recommend. "Trending on Product Hunt" is not a reason.
-- **It knows what's established, not just what's new.** Ask Claude alone and you get stale training data; read a feed and you only get this week. Gold Digger does both: scouts what just launched AND flags the mature tool you're missing — each verified live before it's recommended, never from memory.
-- **It reads primary sources.** MCP registries, the GitHub API, lab changelogs, Hacker News — straight from where launches happen, not the SEO post written about them three days later.
-- **The numbers are real.** Stars, age, benchmarks — copied verbatim from fetched data. Never inflated, never guessed. If it says 4k★, it's 4k★.
+- **It knows what's established, not just what's new.** A feed only shows this week. Gold Digger also flags the mature tool you're missing — and verifies it's alive before recommending, never from memory.
+- **It checks the pulse.** Last push, archived status, real adoption — a repo with 2k stars that died last year doesn't get recommended on stars alone.
+- **It reads primary sources.** MCP registries, the GitHub API, lab changelogs, Hacker News — straight from where launches happen, not the SEO post written three days later.
+- **The numbers are real.** Stars, dates, benchmarks — copied verbatim from fetched data. If it says 4k★, it's 4k★.
 - **It scans before you install.** Any skill or MCP it recommends gets a static safety pass first — credential access, reverse shells, obfuscation. And it *shows* you what it found instead of hiding it, because heuristics throw false positives and the call should be yours.
+
+## Why not just ask Claude?
+
+Because Claude's training data has a cutoff. Ask it what tools to use and you get last year's answer, delivered confidently — superseded tools, dead repos, and nothing that shipped this month.
+
+Gold Digger fixes both ends: **what's new** comes from live sources, not memory. **What's established** gets verified with a real fetch before it's recommended — still exists, still maintained. If it can't verify, it tells you.
+
+And the skill *is* the routine: same sources, same bar, same honesty, every single run — instead of hoping you write the perfect prompt every time.
 
 ## Install
 
@@ -77,7 +86,11 @@ The easy way:
 npx skills add jaimeramiro-dev/gold-digger
 ```
 
-This installs the skill files. The scout still needs two small Python deps — if they're missing, Gold Digger tells you so instead of failing silently. Install them with `pip install -r requirements.txt` from the skill folder (`~/.claude/skills/gold-digger`).
+Then install the two Python deps (the skill will remind you if you forget):
+
+```bash
+pip install -r ~/.claude/skills/gold-digger/requirements.txt
+```
 
 The manual way:
 
@@ -90,7 +103,7 @@ Dependencies are deliberately tiny: PyYAML and feedparser. Everything else is Py
 
 ## First run
 
-It auto-detects your environment and asks one short question about what else you work on — marketing, design, gaming, whatever. That's the whole setup. Your profile lives in `~/.claude/gold-digger/profile.yaml`, outside the skill folder, so reinstalling never wipes it.
+It auto-detects your environment, then asks what you're actually building — the product, how it makes money, what eats your time. From that it derives the dimensions of your project (a game needs animation, UI, analytics; a SaaS needs billing, onboarding, email) and watches those too, not just your stack. That's the whole setup. Your profile lives in `~/.claude/gold-digger/profile.yaml`, outside the skill folder, so reinstalling never wipes it.
 
 Optional but recommended — a free GitHub token bumps your rate limit from 60 to 5,000 requests/hour:
 
@@ -99,8 +112,6 @@ export GITHUB_TOKEN=ghp_your_token_here
 ```
 
 ## How to talk to it
-
-Just talk to Claude normally:
 
 | You say | It does |
 | --- | --- |
@@ -117,30 +128,30 @@ Recommendations always come as a diff on your current setup:
 + ADD       <tool> — because <specific reason tied to your work>
 ↑ USE       <something you already have but aren't using>
 ⇄ CONNECT   <MCP/connector> brings a manual workflow into Claude
+💡 KNOWN    <established tool you're missing — verified live, not from memory>
 - DROP      <tool> — unused or superseded
-💡 KNOWN     <established tool you're missing> — verified live, not from stale memory
 ~ Nothing worth your attention right now
 ```
 
 ## How the filter works
 
-Two stages, on purpose — cheap first, expensive only on the survivors. Each user runs this on their own Claude, so the design keeps cost and time down.
+Cheap first, expensive only on survivors. Each user runs this on their own Claude, so the design keeps cost and time down.
 
 ```
-  SCOUT            STAGE 1           STAGE 2           SAFETY           OUTPUT
-  ─────            ───────           ───────           ──────           ──────
-  ~30 candidates   metadata only,    relevance,        static scan      the diff,
-  from MCP regs,   no tool calls     dedupe, and       on the final     or silence
-  GitHub, HN,      ↓                 switching cost    1–3 only         ↓
-  lab changelogs   ~30 → 8–10        ↓                 ↓                + ADD / ↑ USE
-  (parallel)                         → 1–3             flags shown      ⇄ CONNECT / -
+  SCOUT             STAGE 1          STAGE 2           STAGE 2.5          SAFETY
+  ─────             ───────          ───────           ─────────          ──────
+  ~30 candidates    metadata only,   relevance +       the established    static scan
+  from MCP regs,    no tool calls    liveness +        tool you're        on the final
+  GitHub, HN,       ↓                switching cost    missing — from     1–3 only
+  lab changelogs    ~30 → 8–10       ↓                 knowledge,         ↓
+  (parallel)                         → 1–3             verified live      flags shown
 ```
 
 The scripts do the mechanical work — fetching, parsing, scoring. Claude makes the judgment call. That split is deliberate: deterministic where it should be deterministic, and a real opinion where it counts.
 
 ## Sources
 
-**Layer 1 — ecosystem-wide:** Official MCP Registry, Glama, GitHub (topics `mcp-server`, `agent-skills`), Hacker News, Product Hunt, OSS Insight, Reddit. The MCP and connector registries are *the* channel for "X now connects to Claude."
+**Layer 1 — ecosystem-wide:** Official MCP Registry, Glama, GitHub (topics + your project's dimensions), Hacker News, Product Hunt, OSS Insight, Reddit. The MCP and connector registries are *the* channel for "X now connects to Claude."
 
 **Layer 2 — per-tool, from your profile:** RSS feeds and GitHub releases for OpenAI, DeepMind, Anthropic, Meta AI, DeepSeek, and whatever's in your stack.
 
