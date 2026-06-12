@@ -71,6 +71,18 @@ def _warn(msg: str) -> None:
     print(f"[scout] WARNING: {msg}", file=sys.stderr)
 
 
+class ScoutUnavailable(Exception):
+    """Raised when the scout cannot run at all — missing PyYAML or an unloadable
+    sources.yaml. Surfaced loudly (structured stdout + non-zero exit) so a
+    technical failure is never mistaken for a legitimate "nothing worth your
+    attention". That silence is the product's signature output; a fake silence
+    that looks identical would destroy the one thing users trust it for."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
 def _fetch_readme_excerpt(full_name: str, token: str | None, max_chars: int = 500) -> str:
     """Fetch the first ~500 chars of a GitHub repo's README. Best-effort."""
     url = f"https://api.github.com/repos/{full_name}/readme"
@@ -650,6 +662,21 @@ def run_scout(
     """Run the full scout and return candidates."""
     profile = load_yaml_file(profile_path)
     sources = load_yaml_file(sources_path)
+
+    # Fail loud, never silent. Without PyYAML or a readable sources.yaml the scout
+    # returns zero candidates — indistinguishable from a genuine "nothing today".
+    # Raise instead, so the caller surfaces a fixable error rather than a fake
+    # silence. Silence must be earned, never a swallowed technical failure.
+    if yaml is None:
+        raise ScoutUnavailable(
+            "⚠ Missing dependencies — run: pip install -r requirements.txt"
+        )
+    if not sources:
+        raise ScoutUnavailable(
+            f"⚠ Can't load sources — {sources_path} is missing or empty. "
+            "Reinstall the skill or restore references/sources.yaml."
+        )
+
     token = get_github_token(github_token)
 
     now = datetime.now(timezone.utc)
@@ -823,14 +850,23 @@ def main():
     parser.add_argument("--max-results", type=int, default=DEFAULT_MAX_RESULTS, help="Max candidates to return")
     args = parser.parse_args()
 
-    candidates = run_scout(
-        profile_path=args.profile,
-        sources_path=args.sources,
-        github_token=args.github_token,
-        layer=args.layer,
-        max_age_days=args.max_age_days,
-        max_results=args.max_results,
-    )
+    try:
+        candidates = run_scout(
+            profile_path=args.profile,
+            sources_path=args.sources,
+            github_token=args.github_token,
+            layer=args.layer,
+            max_age_days=args.max_age_days,
+            max_results=args.max_results,
+        )
+    except ScoutUnavailable as e:
+        # Structured error OBJECT (not a candidate array) so the caller can tell a
+        # technical failure apart from legitimate silence. Loud stderr + exit 3.
+        json.dump({"error": "scout_unavailable", "message": e.message},
+                  sys.stdout, indent=2)
+        print()
+        _warn(e.message)
+        sys.exit(3)
 
     json.dump(candidates, sys.stdout, indent=2)
     print()  # trailing newline

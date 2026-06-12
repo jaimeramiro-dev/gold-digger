@@ -274,6 +274,12 @@ When the user indicates a recommendation was a miss — "that was a miss", "not 
 3. RUN scout:
    Bash ${CLAUDE_SKILL_DIR}/scripts/scout.py --profile ~/.claude/gold-digger/profile.yaml --sources ${CLAUDE_SKILL_DIR}/references/sources.yaml
    → stdout = JSON array of candidates (max ~30, pre-sorted)
+   → If stdout is a JSON OBJECT with an "error" field (NOT an array), the scout
+     could not run — missing deps or an unloadable sources.yaml. STOP the review:
+     show the "message" field verbatim (e.g. "⚠ Missing dependencies — run:
+     pip install -r requirements.txt") and do NOT emit the NOTHING line. A
+     technical failure must never masquerade as legitimate silence — that silence
+     is the one output the whole product is built to be trusted on.
 4. LOAD queue from ~/.claude/gold-digger/queue.json (if exists)
 5. For queue items: extract basic metadata from the URL (title, domain). Do NOT web_fetch yet.
 6. MERGE scout results + queue items → candidate list
