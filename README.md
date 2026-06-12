@@ -159,7 +159,7 @@ All free. No paid APIs. Each user runs on their own Claude with their own creden
 
 ## Found gold?
 
-If Gold Digger saved you a week of digging, a star helps other people find it. That's the whole ask.
+Gold Digger saves you a week of digging, a star ⭐️ cost zero and helps us immensely. Fair trade.
 
 ## License
 
