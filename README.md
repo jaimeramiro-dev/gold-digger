@@ -27,14 +27,17 @@ You ask. It digs. You get a short diff on your setup — what to add, what you a
 
   Checked 6 sources, 31 candidates. Kept 3.
 
-  + ADD       Supabase MCP — you're on Postgres in this repo; this puts
-              schema + queries inside Claude instead of a separate tab.
+  + ADD       Supabase MCP — you're on Postgres in this repo and half your
+              recent commits touch raw SQL. Stop alt-tabbing to a client:
+              this puts schema + queries inside Claude.
 
-  ⇄ CONNECT   Stripe MCP — you were dealing with billing last week. Pulls
-              your dashboard into Claude so you stop context-switching.
+  ⇄ CONNECT   Stripe MCP — your whole last week was billing work. Pulls the
+              dashboard into Claude so you quit breaking flow to go read a
+              charge by hand.
 
-  ↑ USE       codegraph — already installed. The new `trace` command maps
-              call paths; you've only ever used `search`.
+  ↑ USE       codegraph — already installed, but you only ever run `search`.
+              The `trace` command maps call paths — the thing you've been
+              doing by eye every time you touch this service.
 
   Curious what got cut? Ask "why'd you skip X?"
 ```
@@ -48,8 +51,8 @@ The part I'm actually proud of: when there's nothing good, it says so. No filler
 
   ~ Nothing worth your attention right now.
 
-  Looked at 34 candidates across 6 sources. A few were close, but none
-  of them beat what you're already running.
+  Looked at 34 candidates across 6 sources. A few were close. None of
+  them earned the swap.
 ```
 
 A newsletter has to ship every week whether there's news or not. Gold Digger doesn't. Most weeks, silence is the honest answer — and that's the point.
@@ -61,6 +64,7 @@ Finding new tools was never the problem. The problem is that there are too many 
 Gold Digger does the opposite:
 
 - **It judges against *your* stack, not the timeline.** Every pick comes with a concrete reason tied to what you actually build. If it can't write that reason, it doesn't recommend. "Trending on Product Hunt" is not a reason.
+- **It knows what's established, not just what's new.** Ask Claude alone and you get stale training data; read a feed and you only get this week. Gold Digger does both: scouts what just launched AND flags the mature tool you're missing — each verified live before it's recommended, never from memory.
 - **It reads primary sources.** MCP registries, the GitHub API, lab changelogs, Hacker News — straight from where launches happen, not the SEO post written about them three days later.
 - **The numbers are real.** Stars, age, benchmarks — copied verbatim from fetched data. Never inflated, never guessed. If it says 4k★, it's 4k★.
 - **It scans before you install.** Any skill or MCP it recommends gets a static safety pass first — credential access, reverse shells, obfuscation. And it *shows* you what it found instead of hiding it, because heuristics throw false positives and the call should be yours.
@@ -72,6 +76,8 @@ The easy way:
 ```bash
 npx skills add jaimeramiro-dev/gold-digger
 ```
+
+This installs the skill files. The scout still needs two small Python deps — if they're missing, Gold Digger tells you so instead of failing silently. Install them with `pip install -r requirements.txt` from the skill folder (`~/.claude/skills/gold-digger`).
 
 The manual way:
 
@@ -112,6 +118,7 @@ Recommendations always come as a diff on your current setup:
 ↑ USE       <something you already have but aren't using>
 ⇄ CONNECT   <MCP/connector> brings a manual workflow into Claude
 - DROP      <tool> — unused or superseded
+💡 KNOWN     <established tool you're missing> — verified live, not from stale memory
 ~ Nothing worth your attention right now
 ```
 
