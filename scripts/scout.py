@@ -30,17 +30,18 @@ try:
 except ImportError:
     yaml = None  # type: ignore
 
-try:
-    import feedparser
-except ImportError:
-    feedparser = None  # type: ignore
+import xml.etree.ElementTree as ET
+
+from net import github_token as _net_github_token
+from net import warn as _net_warn
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-USER_AGENT = "gold-digger/1.0 (https://github.com/jaimeramiro-dev/gold-digger)"
-FETCH_TIMEOUT = 5  # seconds per source
+USER_AGENT = "gold-digger/2.0 (https://github.com/jaimeramiro-dev/gold-digger)"
+FETCH_TIMEOUT = 8  # seconds per source
+SLOW_SOURCE_TIMEOUT = 20  # the official MCP registry routinely takes 7-12s
 MAX_WORKERS = 8
 DEFAULT_MAX_RESULTS = 30
 DEFAULT_MAX_AGE_DAYS = 7
@@ -61,14 +62,21 @@ def _make_request(url: str, headers: dict | None = None, timeout: int = FETCH_TI
         return resp.read()
 
 
-def _fetch_json(url: str, headers: dict | None = None) -> Any:
+def _fetch_json(url: str, headers: dict | None = None, timeout: int = FETCH_TIMEOUT) -> Any:
     """Fetch JSON from a URL."""
-    data = _make_request(url, headers)
+    data = _make_request(url, headers, timeout)
     return json.loads(data)
 
 
+# Per-source failures for this run — reported in the output so a dead source is
+# never mistaken for a quiet one.
+_FAILED: dict[str, str] = {}
+
+
 def _warn(msg: str) -> None:
-    print(f"[scout] WARNING: {msg}", file=sys.stderr)
+    _net_warn(msg, "scout")
+    name, _, err = msg.partition(": ")
+    _FAILED[name] = err or msg
 
 
 class ScoutUnavailable(Exception):
@@ -149,9 +157,9 @@ def _candidate(
 
 def fetch_mcp_registry(since_iso: str) -> list[dict]:
     """Official MCP Registry — no auth required."""
-    url = f"https://registry.modelcontextprotocol.io/v0.1/servers?updated_since={since_iso}&limit=50"
+    url = f"https://registry.modelcontextprotocol.io/v0.1/servers?updated_since={since_iso}&version=latest&limit=50"
     try:
-        data = _fetch_json(url)
+        data = _fetch_json(url, timeout=SLOW_SOURCE_TIMEOUT)
     except Exception as e:
         _warn(f"MCP Registry: {e}")
         return []
@@ -272,31 +280,29 @@ def fetch_github_search(query: str, token: str | None, since_date: str) -> list[
 
 
 def fetch_hn(keywords: list[str], since_unix: int) -> list[dict]:
-    """Hacker News via Algolia API — no auth."""
-    query = " OR ".join(keywords[:5])  # cap query complexity
-    q = urllib.parse.quote(query)
-    url = (
-        f"https://hn.algolia.com/api/v1/search_by_date"
-        f"?query={q}&tags=story&numericFilters=created_at_i>{since_unix}"
-        f"&hitsPerPage=20"
-    )
-    try:
-        data = _fetch_json(url)
-    except Exception as e:
-        _warn(f"HN: {e}")
-        return []
-
-    results = []
-    for hit in data.get("hits", []):
-        results.append(_candidate(
-            source="hn",
-            uid=hit.get("objectID", ""),
-            title=hit.get("title", ""),
-            url=hit.get("url", f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}"),
-            description=hit.get("story_text", "") or "",
-            created_at=hit.get("created_at", ""),
-            points=hit.get("points"),
-        ))
+    """Hacker News via Algolia — one query per keyword (Algolia has no OR operator;
+    joining terms ANDs them and returns nothing). Points floor cuts drive-by posts."""
+    results: list[dict] = []
+    for kw in keywords[:6]:
+        params = urllib.parse.urlencode({
+            "query": kw, "tags": "story", "hitsPerPage": 10,
+            "numericFilters": f"created_at_i>{since_unix},points>=10",
+        })
+        try:
+            data = _fetch_json(f"https://hn.algolia.com/api/v1/search_by_date?{params}")
+        except Exception as e:
+            _warn(f"HN '{kw}': {e}")
+            continue
+        for hit in data.get("hits", []):
+            results.append(_candidate(
+                source="hn",
+                uid=hit.get("objectID", ""),
+                title=hit.get("title", ""),
+                url=hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}",
+                description=hit.get("story_text", "") or "",
+                created_at=hit.get("created_at", ""),
+                points=hit.get("points"),
+            ))
     return results
 
 
@@ -377,37 +383,38 @@ def fetch_github_releases(repo: str, token: str | None, since_iso: str) -> list[
     return results
 
 
+def _xml_text(el: ET.Element | None) -> str:
+    return (el.text or "").strip() if el is not None else ""
+
+
 def fetch_rss(feed_url: str, source_name: str, since_iso: str) -> list[dict]:
-    """Fetch an RSS/Atom feed. Requires feedparser."""
-    if feedparser is None:
-        _warn(f"RSS {source_name}: feedparser not installed, skipping")
-        return []
+    """Fetch an RSS 2.0 or Atom feed with the stdlib parser (no feedparser dependency)."""
     try:
-        raw = _make_request(feed_url)
-        feed = feedparser.parse(raw)
+        root = ET.fromstring(_make_request(feed_url))
     except Exception as e:
         _warn(f"RSS {source_name}: {e}")
         return []
 
+    atom = "{http://www.w3.org/2005/Atom}"
+    items = root.findall(".//item") or root.findall(f".//{atom}entry")
     results = []
-    for entry in feed.entries[:15]:
-        pub = ""
-        if hasattr(entry, "published"):
-            pub = entry.published
-        elif hasattr(entry, "updated"):
-            pub = entry.updated
-
-        link = entry.get("link", "")
-        title = entry.get("title", "")
-        desc = entry.get("summary", "") or entry.get("description", "")
-
+    for item in items[:15]:
+        title = _xml_text(item.find("title")) or _xml_text(item.find(f"{atom}title"))
+        link = _xml_text(item.find("link"))
+        if not link:
+            link_el = item.find(f"{atom}link")
+            link = link_el.get("href", "") if link_el is not None else ""
+        pub = (_xml_text(item.find("pubDate")) or _xml_text(item.find(f"{atom}published"))
+               or _xml_text(item.find(f"{atom}updated")))
+        desc = _xml_text(item.find("description")) or _xml_text(item.find(f"{atom}summary"))
+        desc = re.sub(r"<[^>]+>", " ", desc)
         uid = hashlib.md5(f"{source_name}:{link}".encode()).hexdigest()[:12]
         results.append(_candidate(
             source=f"rss:{source_name}",
             uid=uid,
             title=title,
             url=link,
-            description=desc[:500],
+            description=" ".join(desc.split())[:500],
             created_at=pub,
         ))
     return results
@@ -508,8 +515,28 @@ def load_yaml_file(path: str) -> dict:
 
 
 def get_github_token(cli_token: str | None) -> str | None:
-    """Get GitHub token from CLI arg or environment."""
-    return cli_token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    """CLI arg → GITHUB_TOKEN/GH_TOKEN → `gh auth token`."""
+    return _net_github_token(cli_token)
+
+
+def searchable_needs(profile: dict) -> list[str]:
+    """Search terms from the profile's needs (v4) or dimensions (v3)."""
+    declared = profile.get("declared", {})
+    terms: list[str] = []
+    for need in profile.get("needs", []) or []:
+        if isinstance(need, dict) and need.get("searchable", True):
+            terms.extend(need.get("queries") or [need.get("name", "")])
+    for dim in declared.get("dimensions", []) or []:
+        if isinstance(dim, dict) and dim.get("searchable"):
+            terms.append(dim.get("name", ""))
+    return [t for t in dict.fromkeys(terms) if t]
+
+
+def _source_enabled(sources: dict, *path: str) -> bool:
+    node: Any = sources
+    for key in path:
+        node = node.get(key, {}) if isinstance(node, dict) else {}
+    return not (isinstance(node, dict) and node.get("enabled") is False)
 
 
 def build_hn_keywords(profile: dict) -> list[str]:
@@ -529,11 +556,7 @@ def build_hn_keywords(profile: dict) -> list[str]:
     detected = profile.get("detected", {})
     stack_items = list(detected.get("stack", []))
     declared = profile.get("declared", {})
-    dim_items = [
-        dim.get("name", "")
-        for dim in declared.get("dimensions", [])
-        if isinstance(dim, dict) and dim.get("searchable")
-    ]
+    dim_items = searchable_needs(profile)
 
     # Interleave stack and dimensions
     si, di = 0, 0
@@ -643,7 +666,7 @@ def _filter_warez(candidates: list[dict]) -> list[dict]:
         matched = False
         for pattern in _WAREZ_PATTERNS:
             if pattern.search(text):
-                _warn(f"Filtered warez: {c.get('title', '?')} (matched: {pattern.pattern})")
+                _net_warn(f"Filtered warez: {c.get('title', '?')} (matched: {pattern.pattern})", "scout")
                 matched = True
                 break
         if not matched:
@@ -693,7 +716,8 @@ def run_scout(
         if layer in ("1", "both"):
             # MCP registries
             futures[pool.submit(fetch_mcp_registry, since_iso)] = "mcp_registry"
-            futures[pool.submit(fetch_glama, since_iso)] = "glama"
+            if _source_enabled(sources, "ecosystem", "glama"):
+                futures[pool.submit(fetch_glama, since_iso)] = "glama"
 
             # GitHub searches
             gh_topics = sources.get("ecosystem", {}).get("github", {}).get("search_topics", [])
@@ -725,12 +749,7 @@ def run_scout(
             # Dimension-based GitHub searches (up to 2 calls)
             # Combine searchable dimensions into batched queries so we don't
             # blow the rate limit. Group into max 2 queries of ~3 terms each.
-            declared = profile.get("declared", {})
-            dim_terms = [
-                dim.get("name", "")
-                for dim in declared.get("dimensions", [])
-                if isinstance(dim, dict) and dim.get("searchable") and dim.get("name")
-            ]
+            dim_terms = searchable_needs(profile)
             if dim_terms:
                 # Split into max 2 groups
                 mid = (len(dim_terms) + 1) // 2
@@ -758,7 +777,7 @@ def run_scout(
                 futures[pool.submit(fetch_hn, hn_keywords, since_unix)] = "hn"
 
             # Reddit
-            subs = get_relevant_subs(profile, sources)
+            subs = get_relevant_subs(profile, sources) if _source_enabled(sources, "ecosystem", "reddit") else []
             if subs:
                 cached = _read_cache("reddit")
                 if cached is not None:
@@ -766,9 +785,10 @@ def run_scout(
                 else:
                     futures[pool.submit(fetch_reddit, subs)] = "reddit"
 
-            # OSS Insight trending
-            cached = _read_cache("ossinsight")
-            if cached is not None:
+            # OSS Insight trending (dead since 2026-03 — "data_quality: unavailable")
+            if not _source_enabled(sources, "ecosystem", "ossinsight"):
+                pass
+            elif (cached := _read_cache("ossinsight")) is not None:
                 all_candidates.extend(cached)
             else:
                 futures[pool.submit(fetch_ossinsight)] = "ossinsight"
@@ -805,7 +825,8 @@ def run_scout(
             try:
                 results = future.result()
                 all_candidates.extend(results)
-                _write_cache(cache_key, results)
+                if results:  # never cache a failure/empty answer — it would mask the source for hours
+                    _write_cache(cache_key, results)
             except Exception as e:
                 _warn(f"Source {cache_key} failed: {e}")
 
@@ -823,17 +844,25 @@ def run_scout(
     # (e.g. "crack detection" in image processing is legitimate).
     deduped = _filter_warez(deduped)
 
-    # Sort: prioritize by stars/points (descending), then recency
-    def sort_key(c: dict) -> tuple:
-        meta = c.get("metadata", {})
-        score = meta.get("stars") or meta.get("points") or 0
-        created = c.get("created_at", "")
-        return (-score, created)  # negative score for descending
-
-    deduped.sort(key=sort_key)
-
-    # Cap output
-    return deduped[:max_results]
+    # Stars, HN points and "nothing" are different scales — sorting them together
+    # let GitHub fill every slot. Rank WITHIN each source family, then take turns.
+    families: dict[str, list[dict]] = {}
+    for c in deduped:
+        families.setdefault(c["source"].split(":")[0], []).append(c)
+    for fam in families.values():
+        fam.sort(key=lambda c: -((c.get("metadata") or {}).get("stars")
+                                 or (c.get("metadata") or {}).get("points") or 0))
+    if not deduped and _FAILED and len(_FAILED) >= len(futures):
+        raise ScoutUnavailable(
+            "⚠ Every source failed this run (network down or all rate-limited): "
+            + "; ".join(f"{k}: {v}" for k, v in list(_FAILED.items())[:5])
+        )
+    picked: list[dict] = []
+    while len(picked) < max_results and any(families.values()):
+        for fam in families.values():
+            if fam and len(picked) < max_results:
+                picked.append(fam.pop(0))
+    return picked
 
 
 # ---------------------------------------------------------------------------
@@ -868,7 +897,12 @@ def main():
         _warn(e.message)
         sys.exit(3)
 
-    json.dump(candidates, sys.stdout, indent=2)
+    json.dump({
+        "candidates": candidates,
+        "sources_failed": _FAILED,
+        "by_source": {src: sum(1 for c in candidates if c["source"].split(":")[0] == src)
+                      for src in sorted({c["source"].split(":")[0] for c in candidates})},
+    }, sys.stdout, indent=2)
     print()  # trailing newline
 
 

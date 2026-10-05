@@ -14,6 +14,7 @@ ecosystem:
       priority: high
 
     - name: "Glama"
+      # 2026-10-05: returns 401 without an API key — disabled (see ecosystem.glama.enabled).
       url: "https://glama.ai/api/mcp/v1/servers"
       # Verified 2026-05-21: returns {servers: [...], pageInfo: {...}}
       # Each server has .name, .namespace, .slug, .description, .attributes, .repository.url
@@ -64,7 +65,17 @@ ecosystem:
       auth: none
       type: api
 
+  glama:
+    enabled: false
+
+  ossinsight:
+    # 2026-10-05: trending endpoint returns 0 rows, "unavailable_since 2026-03-01" — disabled.
+    enabled: false
+
   reddit:
+    # 2026-10-05: anonymous JSON now returns 403 "Blocked" for every sub — disabled.
+    # Re-enable only with OAuth support in scout.py.
+    enabled: false
     # Default subs — extended dynamically from profile domains.
     # Access via https://www.reddit.com/r/<sub>/new.json?limit=25
     # No auth, but max 10 req/min. Needs User-Agent header.

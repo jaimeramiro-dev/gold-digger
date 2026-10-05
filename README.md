@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/github/license/jaimeramiro-dev/gold-digger?style=flat">
 </p>
 
-A thousand new tools, MCPs, and skills drop every week. You bookmark a dozen, install three, use none. Gold Digger reads the firehose for you and surfaces the one or two things actually worth your time — or tells you, honestly, that there's nothing today.
+A thousand new tools, MCPs, skills, APIs and AI models drop every week. You bookmark a dozen, install three, use none — and the one that would actually change your project shipped last month and nobody told you. Gold Digger builds the best portfolio for *your* project from live sources, tells you what in your setup is dead weight, and stays quiet when nothing earns a place.
 
 It's a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill. MIT, free to run. And yes, it's named Gold Digger because it's shamelessly only after the good stuff. No apologies.
 
@@ -20,29 +20,27 @@ It's a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill. MIT,
 
 ## See it work
 
-You ask. It digs. You get a short diff on your setup — what to add, what you already have but aren't using, what's established that you're missing. Every line carries the reason, in your terms:
+Ask for your portfolio. It reads your project and your real usage, maps what the project needs, and tells you in a few lines what you're missing and what's dead weight:
 
 ```
-> What's worth my attention?
+> Build my portfolio
 
-  Checked 6 sources, 31 candidates. Kept 3.
+  Your portfolio for Lars (operations AI for law firms), checked live today.
 
-  + ADD       Supabase MCP — you're on Postgres in this repo and half your
-              recent commits touch raw SQL. Stop alt-tabbing to a client:
-              this puts schema + queries inside Claude.
+  What you're missing:
+  - Legalize: Spain's legislation as versioned official text, with an official
+    MCP. Today every legal search re-reads ~106k tokens of web pages.
+  - VeriFactu: Lars issues invoices and it's mandatory from 2027-01-01.
+    Nothing clears the bar yet — build it or integrate an API?
 
-  ↑ USE       codegraph — already installed, but you only ever run `search`.
-              The `trace` command maps call paths — the thing you've been
-              doing by eye every time you touch this service.
+  What's surplus:
+  - 19 of the 21 caveman skills: never used in this project.
+  - Roblox Studio MCP: 0 calls in 60 days, in any project.
 
-  💡 KNOWN    Cursor — not new, just missing. Your last week was multi-file
-              refactors done by hand. Verified live today — not pulled from
-              stale training data.
-
-  Curious what got cut? Ask "why'd you skip X?"
+  The rest is well covered. Want me to install Legalize?
 ```
 
-Real stars, ages, and dates show up inline on each pick — copied verbatim from live data, never the round numbers I'd make up for a screenshot. That's why this README shows the shape of a run, not a staged one.
+Short on purpose. Every number, source and safety verdict behind each line is saved and one question away ("why?", "show sources") — copied verbatim from live data, never made up.
 
 The part I'm actually proud of: when there's nothing good, it says so. No filler pick to look busy.
 
@@ -51,111 +49,82 @@ The part I'm actually proud of: when there's nothing good, it says so. No filler
 
   ~ Nothing worth your attention right now.
 
-  Looked at 34 candidates across 6 sources. A few were close. None of
+  Looked at 30 candidates across 6 sources. A few were close. None of
   them earned the swap.
 ```
 
-A newsletter has to ship every week whether there's news or not. Gold Digger doesn't. Most weeks, silence is the honest answer — and that's the point.
-
 ## Why it's not another feed
 
-Finding new tools was never the problem. The problem is that there are too many and 99% of them aren't for you. Feeds, newsletters, and "awesome-X" lists all make it worse — more to read, not less.
+Finding tools was never the problem. There are too many, and 99% of them aren't for you. Feeds, newsletters and "awesome-X" lists make it worse — more to read, not less.
 
-Gold Digger does the opposite:
-
-- **It judges against *your* stack, not the timeline.** Every pick comes with a concrete reason tied to what you actually build. If it can't write that reason, it doesn't recommend. "Trending on Product Hunt" is not a reason.
-- **It knows what's established, not just what's new.** A feed only shows this week. Gold Digger also flags the mature tool you're missing — and verifies it's alive before recommending, never from memory.
-- **It checks the pulse.** Last push, archived status, real adoption — a repo with 2k stars that died last year doesn't get recommended on stars alone.
-- **It reads primary sources.** MCP registries, the GitHub API, lab changelogs, Hacker News — straight from where launches happen, not the SEO post written three days later.
-- **The numbers are real.** Stars, dates, benchmarks — copied verbatim from fetched data. If it says 4k★, it's 4k★.
-- **It scans before you install.** Any skill or MCP it recommends gets a static safety pass first — credential access, reverse shells, obfuscation. And it *shows* you what it found instead of hiding it, because heuristics throw false positives and the call should be yours.
+- **It starts from your project, not the timeline.** It works out what your project needs end to end — not just code: assets, payments, distribution, the AI it leans on — and fills those needs. A game, a SaaS and a video channel get completely different portfolios.
+- **It audits what you already have.** It reads your Claude Code history to see which MCPs and skills you actually call, and which dependencies you actually import. Unused, duplicated, or wrong-project tools get called out.
+- **It knows noise when it sees it.** Clones of a skill with inflated install counts, re-publishers of someone else's MCP, a 2-week-old repo with 300K installs and 40 stars, awesome-lists, dead repos. The original and official wins; the copy gets named for what it is.
+- **The numbers are real.** Installs, stars, downloads, dates — verbatim from data fetched in that run.
+- **It scans before you install.** Skills come with the four-auditor security check from skills.sh; repos and MCP servers get a static red-flag scan. Flags are shown, not hidden — heuristics throw false positives and the call is yours.
 
 ## Why not just ask Claude?
 
-Because Claude's training data has a cutoff. Ask it what tools to use and you get last year's answer, delivered confidently — superseded tools, dead repos, and nothing that shipped this month.
+Because the model's memory is stale by definition. Ask it what to use and you get last year's answer, delivered confidently — and it has never heard of the thing that launched last month.
 
-Gold Digger fixes both ends: **what's new** comes from live sources, not memory. **What's established** gets verified with a real fetch before it's recommended — still exists, still maintained. If it can't verify, it tells you.
+So Gold Digger has one hard rule: **the model's memory is never a source.** Every candidate has to show up in live results during that run — skills.sh, the MCP registry, GitHub, npm, Hacker News, or a web search verified with a live check. The model decides *what to search for* and *judges what comes back*. It searches by capability ("text to speech api", "decision model"), not just brand names it already knows, so new tools it has never seen can still win.
 
-And the skill *is* the routine: same sources, same bar, same honesty, every single run — instead of hoping you write the perfect prompt every time.
+And the skill *is* the routine: same sources, same bar, same honesty, every run.
 
 ## Install
 
-The easy way:
-
 ```bash
 npx skills add jaimeramiro-dev/gold-digger
-```
-
-Then install the two Python deps (the skill will remind you if you forget):
-
-```bash
 pip install -r ~/.claude/skills/gold-digger/requirements.txt
 ```
 
-The manual way:
+Or manually:
 
 ```bash
 git clone https://github.com/jaimeramiro-dev/gold-digger.git ~/.claude/skills/gold-digger
 cd ~/.claude/skills/gold-digger && pip install -r requirements.txt
 ```
 
-Dependencies are deliberately tiny: PyYAML and feedparser. Everything else is Python stdlib.
+One dependency: PyYAML. Everything else is Python stdlib.
 
 ## First run
 
-It auto-detects your environment, then asks what you're actually building — the product, how it makes money, what eats your time. From that it derives the dimensions of your project (a game needs animation, UI, analytics; a SaaS needs billing, onboarding, email) and watches those too, not just your stack. That's the whole setup. Your profile lives in `~/.claude/gold-digger/profile.yaml`, outside the skill folder, so reinstalling never wipes it.
+It inventories your project and your Claude setup — dependencies, config files, the services your env var *names* point to (never the values), every MCP server, plugin and skill, and how often you've actually used each one. Then it asks four plain questions: what you're making, how it makes money, what eats your time, and what you use outside the repo. From that it derives your project's needs and shows them to you. Your profile lives in `~/.claude/gold-digger/`, outside the skill folder, so reinstalling never wipes it.
 
-Optional but recommended — a free GitHub token bumps your rate limit from 60 to 5,000 requests/hour:
-
-```bash
-export GITHUB_TOKEN=ghp_your_token_here
-```
+GitHub limits are handled automatically if you have `GITHUB_TOKEN`, `GH_TOKEN`, or the `gh` CLI logged in.
 
 ## How to talk to it
 
 | You say | It does |
 | --- | --- |
-| *"What's worth my attention?"* | Scouts, filters hard, hands back 1–3 moves or silence |
-| *"Consider this: `<link>`"* | Saves a link to weigh on your next review |
-| *"That was a miss"* | Recalibrates — that topic gets weighted down going forward |
-| *"Think lateral about this"* | Speculative mode — looks for non-obvious cross-domain fits |
+| *"Build my portfolio"* / *"What am I missing?"* | Needs → audit what you have → live search → keep / add / swap / drop per need |
+| *"Audit my setup"* / *"What can I drop?"* | Same run, focused on what's surplus |
+| *"What's worth my attention?"* | Radar: this week's launches, judged against your portfolio — 1–3 moves or silence |
+| *"Consider this: `<link>`"* | Saves a link to weigh on the next run (or now, if you ask) |
+| *"That was a miss"* | Recalibrates — that topic gets weighted down |
+| *"Think lateral about this"* | Speculative mode — non-obvious uses across your needs |
 
-## Output format
-
-Recommendations always come as a diff on your current setup:
-
-```
-+ ADD       <tool> — because <specific reason tied to your work>
-↑ USE       <something you already have but aren't using>
-⇄ CONNECT   <MCP/connector> brings a manual workflow into Claude
-💡 KNOWN    <established tool you're missing — verified live, not from memory>
-- DROP      <tool> — unused or superseded
-~ Nothing worth your attention right now
-```
-
-## How the filter works
-
-Cheap first, expensive only on survivors. Each user runs this on their own Claude, so the design keeps cost and time down.
+## How it works
 
 ```
-  SCOUT             STAGE 1          STAGE 2           STAGE 2.5          SAFETY
-  ─────             ───────          ───────           ─────────          ──────
-  ~30 candidates    metadata only,   relevance +       the established    static scan
-  from MCP regs,    no tool calls    liveness +        tool you're        on the final
-  GitHub, HN,       ↓                switching cost    missing — from     1–3 only
-  lab changelogs    ~30 → 8–10       ↓                 knowledge,         ↓
-  (parallel)                         → 1–3             verified live      flags shown
+  INVENTORY          NEEDS              LIVE SEARCH                 JUDGE              SAFETY
+  ─────────          ─────              ───────────                 ─────              ──────
+  deps, configs,     derived from       skills.sh · MCP registry    noise vs gold      skills.sh audits
+  services, MCPs,    product, money,    GitHub · npm · HN           rubric: fit,       + static scan
+  skills, plugins    pain points,       + web search for products,  alive, canonical,  on the picks only
+  + real usage       what you have      services and AI models      credible, net win
+                                        (every hit verified live)
 ```
 
-The scripts do the mechanical work — fetching, parsing, scoring. Claude makes the judgment call. That split is deliberate: deterministic where it should be deterministic, and a real opinion where it counts.
+The scripts do the mechanical work — fetching, grouping clones, pulling audits, mining usage. Claude makes the judgment call.
 
 ## Sources
 
-**Layer 1 — ecosystem-wide:** Official MCP Registry, Glama, GitHub (topics + your project's dimensions), Hacker News, Product Hunt, OSS Insight, Reddit. The MCP and connector registries are *the* channel for "X now connects to Claude."
+**Portfolio search (keyword, no date limit):** [skills.sh](https://skills.sh) search + security audits (the API behind `npx skills find`), the Official MCP Registry, GitHub, npm, Hacker News, and web search for everything that isn't in a registry — verified with a live check before it can be recommended.
 
-**Layer 2 — per-tool, from your profile:** RSS feeds and GitHub releases for OpenAI, DeepMind, Anthropic, Meta AI, DeepSeek, and whatever's in your stack.
+**Radar (what's new):** MCP Registry updates, GitHub (topics + your needs), Hacker News, release feeds for the AI labs and for whatever is in your stack.
 
-All free. No paid APIs. Each user runs on their own Claude with their own credentials — the creator's keys are never in the skill.
+All free. No paid APIs. Each user runs on their own Claude with their own credentials.
 
 ## Found gold?
 
