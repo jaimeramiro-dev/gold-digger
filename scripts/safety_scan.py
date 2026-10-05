@@ -235,8 +235,12 @@ def check_provenance(repo_url: str) -> dict:
     return provenance
 
 
+SCANNED_FILES = 0  # set by scan_repo — "safe" over zero files is not a verdict
+
+
 def scan_repo(repo_path: str) -> list[dict]:
     """Scan all files in a repo directory."""
+    global SCANNED_FILES
     all_flags = []
 
     for root, dirs, files in os.walk(repo_path):
@@ -252,6 +256,7 @@ def scan_repo(repo_path: str) -> list[dict]:
                 continue
 
             filepath = os.path.join(root, filename)
+            SCANNED_FILES += 1
             # Make path relative for cleaner output
             rel_path = os.path.relpath(filepath, repo_path)
 
@@ -371,9 +376,13 @@ def main():
 
     # Verdict
     verdict = determine_verdict(flags, provenance)
+    if SCANNED_FILES == 0:
+        # Nothing to read (hosted-only server, docs-only repo): say so instead of "safe".
+        verdict = "not_scanned"
 
     result = {
         "verdict": verdict,
+        "files_scanned": SCANNED_FILES,
         "flags": flags,
         "provenance": provenance,
         "disclaimer": "First-pass red-flag detection, not a security guarantee.",
